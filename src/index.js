@@ -34,7 +34,7 @@ app.get('/', (req, res) => {
 app.get('/files/all', async (req, res) => {
   try {
     const result = await cloudinary.search
-      .expression(`folder:${FOLDER}`)
+      .expression(`folder:${FOLDER}/*`)
       .sort_by('created_at', 'desc')
       .execute();
     res.json(result);
