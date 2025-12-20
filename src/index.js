@@ -30,17 +30,14 @@ app.get('/', (req, res) => {
   res.json({ message: 'Welcome to Cloudinary API Server!' });
 });
 
-// Lấy tất cả file
+// Lấy tất cả file trong thư mục
 app.get('/files/all', async (req, res) => {
   try {
-    const result = await cloudinary.api.resources({
-  type: 'upload',
-  prefix: 'AI Slide',
-  max_results: 500
-}, function(error, result) {
-      res.json(result.resources);
-});
-    
+    const result = await cloudinary.search
+      .expression(`prefix:${FOLDER}/`)
+      .sort_by('created_at', 'desc')
+      .execute();
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -57,20 +54,27 @@ app.get('/files/:id', async (req, res) => {
   }
 });
 
+// Upload file (hỗ trợ cả image và raw như JSON)
 app.post('/upload', async (req, res) => {
   const { file, folder } = req.body;
   if (!file) return res.status(400).json({ error: 'Thiếu file để upload.' });
+
   try {
-    const result = await cloudinary.uploader.upload(file, { folder: folder || FOLDER });
+    const result = await cloudinary.uploader.upload(file, {
+      folder: folder || FOLDER,
+      resource_type: 'auto', // tự động nhận diện loại file
+    });
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// Cập nhật file (đổi tên hoặc mô tả)
 app.put('/files', async (req, res) => {
   const { id, newPublicId, description } = req.body;
   if (!id) return res.status(400).json({ error: 'Thiếu ID tài nguyên.' });
+
   try {
     if (newPublicId) await cloudinary.uploader.rename(id, newPublicId);
     if (description !== undefined) {
@@ -82,11 +86,39 @@ app.put('/files', async (req, res) => {
   }
 });
 
+// Xóa theo ID
 app.delete('/files/:id', async (req, res) => {
   const { id } = req.params;
   try {
     const result = await cloudinary.uploader.destroy(id);
     res.json({ message: 'Xóa thành công', result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug: Lấy config
+app.get('/config', (req, res) => {
+  res.json({
+    cloud_name: cloudinary.config().cloud_name,
+    api_key: cloudinary.config().api_key,
+    has_secret: !!cloudinary.config().api_secret,
+  });
+});
+
+// Debug: Lấy tất cả public_id (tối đa 10)
+app.get('/files/public', async (req, res) => {
+  try {
+    const result = await cloudinary.search
+      .expression('*')
+      .sort_by('created_at', 'desc')
+      .max_results(100)
+      .execute();
+    res.json(result.resources.slice(0, 10).map(r => ({
+      public_id: r.public_id,
+      folder: r.folder,
+      created_at: r.created_at
+    })));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
