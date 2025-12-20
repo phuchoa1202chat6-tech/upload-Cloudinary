@@ -30,17 +30,15 @@ app.get('/', (req, res) => {
   res.json({ message: 'Welcome to Cloudinary API Server!' });
 });
 
-// Lấy tất cả file trong thư mục
 app.get('/files/all', async (req, res) => {
   try {
     const result = await cloudinary.api.resources({
-  type: 'upload',
-  prefix: 'AI Slide',
-  max_results: 500
-}, function(error, result) {
-      res.json(result.resources);
-});
-    
+      resource_type: 'raw', // JSON files are 'raw' type, not 'upload'
+      type: 'upload',
+      prefix: 'AI Slide/', // Remove the /* wildcard
+      max_results: 500
+    });
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -59,11 +57,11 @@ app.get('/files/:id', async (req, res) => {
 
 // Upload JSON
 app.post('/upload', async (req, res) => {
-  const { data, fileName, folder } = req.body;
-  if (!data) return res.status(400).json({ error: 'Thiếu dữ liệu JSON để upload.' });
+  const { file, public_id, folder } = req.body;
+  if (!file) return res.status(400).json({ error: 'Thiếu dữ liệu JSON để upload.' });
 
   try {
-    const jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
+    const jsonStr = typeof file === 'string' ? file : JSON.stringify(file);
     const buffer = Buffer.from(jsonStr, 'utf-8');
     const base64 = buffer.toString('base64');
     const fileDataUrl = `data:application/json;base64,${base64}`;
@@ -71,7 +69,8 @@ app.post('/upload', async (req, res) => {
     const result = await cloudinary.uploader.upload(fileDataUrl, {
       folder: folder || FOLDER,
       resource_type: 'raw',
-      public_id: `${fileName || Date.now()}.json`,
+      public_id: `${public_id || Date.now()}.json`,
+      unique_filename: false
     });
     res.json(result);
   } catch (error) {
@@ -98,10 +97,15 @@ app.put('/files', async (req, res) => {
 // Xóa theo ID
 app.delete('/files/:id', async (req, res) => {
   const { id } = req.params;
+  console.log('Deleting file with ID:', id);
+
   try {
-    const result = await cloudinary.uploader.destroy(id);
+    const result = await cloudinary.uploader.destroy(id, {
+      resource_type: 'raw' // Thêm dòng này nếu file là JSON
+    });
     res.json({ message: 'Xóa thành công', result });
   } catch (error) {
+    console.error('Delete error:', error);
     res.status(500).json({ error: error.message });
   }
 });
