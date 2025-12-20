@@ -33,11 +33,14 @@ app.get('/', (req, res) => {
 // Lấy tất cả file
 app.get('/files/all', async (req, res) => {
   try {
-    const result = await cloudinary.search
-      .expression(`folder:${FOLDER}/*`)
-      .sort_by('created_at', 'desc')
-      .execute();
-    res.json(result);
+    const result = await cloudinary.api.resources({
+  type: 'upload',
+  prefix: 'AI Slide',
+  max_results: 500
+}, function(error, result) {
+      res.json(result.resources);
+});
+    
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
