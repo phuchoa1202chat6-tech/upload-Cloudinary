@@ -34,7 +34,7 @@ app.get('/', (req, res) => {
 app.get('/files/all', async (req, res) => {
   try {
     const result = await cloudinary.search
-      .expression(`prefix:${FOLDER}/`)
+      .expression(`folder:${FOLDER}`)
       .sort_by('created_at', 'desc')
       .execute();
     res.json(result);
@@ -54,15 +54,21 @@ app.get('/files/:id', async (req, res) => {
   }
 });
 
-// Upload file (hỗ trợ cả image và raw như JSON)
+// Upload JSON
 app.post('/upload', async (req, res) => {
-  const { file, folder } = req.body;
-  if (!file) return res.status(400).json({ error: 'Thiếu file để upload.' });
+  const { data, fileName, folder } = req.body;
+  if (!data) return res.status(400).json({ error: 'Thiếu dữ liệu JSON để upload.' });
 
   try {
-    const result = await cloudinary.uploader.upload(file, {
+    const jsonStr = typeof data === 'string' ? data : JSON.stringify(data);
+    const buffer = Buffer.from(jsonStr, 'utf-8');
+    const base64 = buffer.toString('base64');
+    const fileDataUrl = `data:application/json;base64,${base64}`;
+
+    const result = await cloudinary.uploader.upload(fileDataUrl, {
       folder: folder || FOLDER,
-      resource_type: 'auto', // tự động nhận diện loại file
+      resource_type: 'raw',
+      public_id: `${fileName || Date.now()}.json`,
     });
     res.json(result);
   } catch (error) {
