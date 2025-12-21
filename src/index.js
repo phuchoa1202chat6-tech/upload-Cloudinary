@@ -2,6 +2,7 @@ import express from 'express';
 import { v2 as cloudinary } from 'cloudinary';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { Readable } from 'stream';
 
 dotenv.config();
 
@@ -73,14 +74,28 @@ app.post('/upload', async (req, res) => {
       jsonStr = JSON.stringify(file);
     }
 
-    const result = await cloudinary.uploader.upload(Buffer.from(jsonStr, 'utf8'), {
-      folder: folder || FOLDER,
-      resource_type: 'raw',
-      public_id: `${public_id || Date.now()}.json`,
-      unique_filename: false
+    const buffer = Buffer.from(jsonStr, 'utf8');
+    const stream = Readable.from(buffer);
+
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: folder || FOLDER,
+          resource_type: 'raw',
+          public_id: `${public_id || Date.now()}.json`,
+          unique_filename: false
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      stream.pipe(uploadStream);
     });
+
     res.json(result);
   } catch (error) {
+    console.error('Upload error:', error);
     res.status(500).json({ error: error.message });
   }
 });
