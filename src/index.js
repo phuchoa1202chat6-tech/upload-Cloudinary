@@ -61,12 +61,19 @@ app.post('/upload', async (req, res) => {
   if (!file) return res.status(400).json({ error: 'Thiếu dữ liệu JSON để upload.' });
 
   try {
-    const jsonStr = typeof file === 'string' ? file : JSON.stringify(file);
-    const buffer = Buffer.from(jsonStr, 'utf-8');
-    const base64 = buffer.toString('base64');
-    const fileDataUrl = `data:application/json;base64,${base64}`;
+    let jsonStr;
+    if (typeof file === 'string') {
+      if (file.startsWith('data:application/json;base64,')) {
+        const base64 = file.split(',')[1];
+        jsonStr = Buffer.from(base64, 'base64').toString('utf8');
+      } else {
+        jsonStr = file;
+      }
+    } else {
+      jsonStr = JSON.stringify(file);
+    }
 
-    const result = await cloudinary.uploader.upload(fileDataUrl, {
+    const result = await cloudinary.uploader.upload(Buffer.from(jsonStr, 'utf8'), {
       folder: folder || FOLDER,
       resource_type: 'raw',
       public_id: `${public_id || Date.now()}.json`,
