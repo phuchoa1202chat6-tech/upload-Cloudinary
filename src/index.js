@@ -9,7 +9,7 @@ dotenv.config();
 
 const openai = new OpenAI({
   baseURL: 'https://ai.megallm.io/v1',
-  apiKey: process.env.MEGA_CLOUD_NAME;
+  apiKey: process.env.MEGA_CLOUD_NAME
 });
 
 const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
