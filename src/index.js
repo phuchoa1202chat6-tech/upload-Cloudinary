@@ -3,8 +3,14 @@ import { v2 as cloudinary } from 'cloudinary';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { Readable } from 'stream';
+import OpenAI from 'openai';
 
 dotenv.config();
+
+const openai = new OpenAI({
+  baseURL: 'https://ai.megallm.io/v1',
+  apiKey: process.env.MEGA_CLOUD_NAME;
+});
 
 const CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 const API_KEY = process.env.CLOUDINARY_API_KEY;
@@ -96,6 +102,98 @@ app.post('/upload', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+const SYSTEM_PROMPT = `Bạn là một công cụ chuyển đổi nội dung bài học thành dữ liệu JSON cho Slide.
+
+**NHIỆM VỤ:**
+1.  Tiếp nhận văn bản dài từ người dùng.
+2.  Chia văn bản thành các đoạn nhỏ, mỗi đoạn là một Slide.
+3.  Tạo JSON Array chứa thông tin cho từng slide.
+
+**QUY TẮC CỐT LÕI:**
+*   **KHÔNG TÓM TẮT \`desc\`:** Trường \`desc\` phải chứa đầy đủ câu chữ của đoạn văn bản gốc tương ứng để người dùng đọc nguyên văn. Không được cắt bớt nội dung.
+*   **PHONG CÁCH ẢNH ĐƠN GIẢN:** \`promptImage\` không được dùng style 4k/8k/chi tiết cao. Hãy mô tả ảnh phong cách đơn giản, dễ nhìn ở kích thước nhỏ (300px).
+*   **OUTPUT:** Chỉ trả về chuỗi JSON (Raw JSON), không có markdown block, không có lời dẫn.
+
+**CẤU TRÚC JSON (Array of Objects):**
+[
+  {
+    "title": "String - Tiếng Việt: Tiêu đề ngắn gọn bao quát nội dung đoạn này (dưới 10 từ)",
+    "desc": "String - Tiếng Việt: Nội dung văn bản GỐC của đoạn này (giữ nguyên văn để đọc)",
+    "promptImage": "String - Tiếng Anh: Mô tả ảnh cho DiffusionPipeline."
+  }
+]
+
+**HƯỚNG DẪN VIẾT PROMPT IMAGE:**
+*   Viết bằng Tiếng Anh.
+*   Phong cách: Simple flat illustration, vector art, minimalist, cartoon style, or simple icon style.
+*   Tránh: Photorealistic, highly detailed, complex background, 4k, 8k.
+*   Tập trung vào chủ thể chính rõ ràng trên nền đơn giản.
+
+**VÍ DỤ:**
+Input: "Xin chào các em. Hôm nay chúng ta tìm hiểu về loài Mèo. Mèo là động vật có vú nhỏ nhắn và ăn thịt, sống chung với loài người."
+
+Output:
+[
+  {
+    "title": "Giới thiệu về loài Mèo",
+    "desc": "Xin chào các em. Hôm nay chúng ta tìm hiểu về loài Mèo. Mèo là động vật có vú nhỏ nhắn và ăn thịt, sống chung với loài người.",
+    "promptImage": "cute cat sitting, simple flat illustration, vector style, white background, minimalist, soft colors, clear shapes"
+  }
+]`;
+
+app.post('/convert-text-to-json', async (req, res) => {
+  const { text, title } = req.body;
+  console.log("text:", text);
+  if (!text || !title) {
+    return res.status(400).json({ error: 'Thiếu văn bản hoặc tiêu đề.' });
+  }
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'llama3.3-70b-instruct',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: text }
+      ]
+    });
+
+    const aiResponse = response.choices[0].message.content.trim();
+    let jsonArray;
+
+    try {
+      const jsonMatch = aiResponse.match(/```(?:json)?\n([\s\S]*?)\n```/);
+      const cleanJson = jsonMatch ? jsonMatch[1] : aiResponse;
+      jsonArray = JSON.parse(cleanJson);
+    } catch (parseError) {
+      return res.status(500).json({ error: 'Không thể parse JSON từ AI.' });
+    }
+
+    const jsonStr = JSON.stringify(jsonArray, null, 2);
+    const buffer = Buffer.from(jsonStr, 'utf8');
+    const stream = Readable.from(buffer);
+
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'AI Slide',
+          resource_type: 'raw',
+          public_id: `${title}.json`,
+          unique_filename: false
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      stream.pipe(uploadStream);
+    });
+
+    res.json({ message: 'Convert và upload thành công', result });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
