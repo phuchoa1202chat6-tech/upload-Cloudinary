@@ -154,7 +154,7 @@ app.post('/convert-text-to-json', async (req, res) => {
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'qwen3-coder-480b-a35b-instruct',
+      model: 'qwen/qwen3-next-80b-a3b-instruct',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: text }
