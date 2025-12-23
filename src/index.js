@@ -147,32 +147,43 @@ Output:
 
 app.post('/convert-text-to-json', async (req, res) => {
   const { text, title } = req.body;
-  console.log("text:", text);
   if (!text || !title) {
     return res.status(400).json({ error: 'Thiếu văn bản hoặc tiêu đề.' });
   }
 
   try {
-    const response = await openai.chat.completions.create({
-      model: 'deepseek-ai/deepseek-v3.1-terminus',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: text }
-      ]
-    });
+    // Chia văn bản thành 3 phần
+    const part1End = text.indexOf('2. Phần Thân Bài');
+    const part2End = text.indexOf('3. Phần Kết Thúc');
 
-    const aiResponse = response.choices[0].message.content.trim();
-    let jsonArray;
+    const part1 = text.substring(0, part1End);
+    const part2 = text.substring(part1End, part2End);
+    const part3 = text.substring(part2End);
 
-    try {
+    // Gọi AI cho từng phần
+    const processPart = async (sectionText, index) => {
+      await new Promise(resolve => setTimeout(resolve, 5000 * index));
+      const response = await openai.chat.completions.create({
+        model: 'deepseek-ai/deepseek-v3.1-terminus',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: sectionText }
+        ]
+      });
+      const aiResponse = response.choices[0].message.content.trim();
       const jsonMatch = aiResponse.match(/```(?:json)?\n([\s\S]*?)\n```/);
       const cleanJson = jsonMatch ? jsonMatch[1] : aiResponse;
-      jsonArray = JSON.parse(cleanJson);
-    } catch (parseError) {
-      return res.status(500).json({ error: 'Không thể parse JSON từ AI.' });
-    }
+      return JSON.parse(cleanJson);
+    };
 
-    const jsonStr = JSON.stringify(jsonArray, null, 2);
+    const [json1, json2, json3] = await Promise.all([
+      processPart(part1, 1),
+      processPart(part2, 2),
+      processPart(part3, 3)
+    ]);
+
+    const combinedJson = [...json1, ...json2, ...json3];
+    const jsonStr = JSON.stringify(combinedJson, null, 2);
     const buffer = Buffer.from(jsonStr, 'utf8');
     const stream = Readable.from(buffer);
 
