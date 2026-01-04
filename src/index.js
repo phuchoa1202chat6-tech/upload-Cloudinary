@@ -151,6 +151,7 @@ app.post('/convert-text-to-json', async (req, res) => {
     return res.status(400).json({ error: 'Thiếu văn bản hoặc tiêu đề.' });
   }
 
+  console.log("text, title:", text, title);
   try {
     // Chia văn bản thành 3 phần
     const part1End = text.indexOf('2. Phần Thân Bài');
@@ -160,27 +161,48 @@ app.post('/convert-text-to-json', async (req, res) => {
     const part2 = text.substring(part1End, part2End);
     const part3 = text.substring(part2End);
 
-    // Gọi AI cho từng phần
-    const processPart = async (sectionText, index) => {
-      await new Promise(resolve => setTimeout(resolve, 5000 * index));
-      const response = await openai.chat.completions.create({
-        model: 'deepseek-ai/deepseek-v3.1-terminus',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: sectionText }
-        ]
-      });
-      const aiResponse = response.choices[0].message.content.trim();
-      const jsonMatch = aiResponse.match(/```(?:json)?\n([\s\S]*?)\n```/);
-      const cleanJson = jsonMatch ? jsonMatch[1] : aiResponse;
-      return JSON.parse(cleanJson);
-    };
+    // Gọi AI 3 lần lần lượt
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    const response1 = await openai.chat.completions.create({
+      model: 'deepseek-ai/deepseek-v3.1-terminus',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: part1 }
+      ]
+    });
 
-    const [json1, json2, json3] = await Promise.all([
-      processPart(part1, 1),
-      processPart(part2, 2),
-      processPart(part3, 3)
-    ]);
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    const response2 = await openai.chat.completions.create({
+      model: 'deepseek-ai/deepseek-v3.1-terminus',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: part2 }
+      ]
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    const response3 = await openai.chat.completions.create({
+      model: 'deepseek-ai/deepseek-v3.1-terminus',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: part3 }
+      ]
+    });
+
+    const aiResponse1 = response1.choices[0].message.content.trim();
+    const jsonMatch1 = aiResponse1.match(/```(?:json)?\n([\s\S]*?)\n```/);
+    const cleanJson1 = jsonMatch1 ? jsonMatch1[1] : aiResponse1;
+    const json1 = JSON.parse(cleanJson1);
+
+    const aiResponse2 = response2.choices[0].message.content.trim();
+    const jsonMatch2 = aiResponse2.match(/```(?:json)?\n([\s\S]*?)\n```/);
+    const cleanJson2 = jsonMatch2 ? jsonMatch2[1] : aiResponse2;
+    const json2 = JSON.parse(cleanJson2);
+
+    const aiResponse3 = response3.choices[0].message.content.trim();
+    const jsonMatch3 = aiResponse3.match(/```(?:json)?\n([\s\S]*?)\n```/);
+    const cleanJson3 = jsonMatch3 ? jsonMatch3[1] : aiResponse3;
+    const json3 = JSON.parse(cleanJson3);
 
     const combinedJson = [...json1, ...json2, ...json3];
     const jsonStr = JSON.stringify(combinedJson, null, 2);
